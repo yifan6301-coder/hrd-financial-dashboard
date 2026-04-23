@@ -698,15 +698,30 @@ function readF(file,t){
       if(t==='rev')revWB=wb;else expWB=wb;
       (t==='rev'?['uRevZ','mRevZ']:['uExpZ','mExpZ']).forEach(id=>{const z=$(id);if(z)z.classList.add('ok')});
       (t==='rev'?['uRevN','mRevN']:['uExpN','mExpN']).forEach(id=>{const el=$(id);if(el)el.innerHTML='<span style="color:var(--ga)">&#10003;</span> '+file.name});
-      $('goBtn').disabled=!(revWB&&expWB);$('mGoBtn').disabled=!(revWB&&expWB);
+      $('goBtn').disabled=!(revWB&&expWB);
+      $('mGoBtn').disabled=!mGoBtnEnabled();
     }catch(err){showErr('Error: '+err.message)}
   };r.readAsArrayBuffer(file);
+}
+// Role-aware enable logic for the Update modal's "Update 更新" button
+function mGoBtnEnabled(){
+  const role=sessionStorage.getItem('hrd_role');
+  if(role==='cashier')     return !!expWB;                 // expenses only
+  if(role==='receivables') return !!revWB;                 // revenue only
+  return !!(revWB||expWB);                                  // finance/admin/other: either
 }
 function showErr(msg){const el=$('modal').classList.contains('on')?$('mErr'):$('uErr');el.textContent=msg;el.classList.add('on')}
 function hideErr(){$('uErr').classList.remove('on');$('mErr').classList.remove('on')}
 function openModal(){
   revWB=null;expWB=null;['mRevZ','mExpZ'].forEach(id=>$(id).classList.remove('ok'));
-  $('mRevN').innerHTML='';$('mExpN').innerHTML='';$('mGoBtn').disabled=true;hideErr();
+  $('mRevN').innerHTML='';$('mExpN').innerHTML='';hideErr();
+  // Role-based slot visibility — hide the slot this role can't use
+  const role=sessionStorage.getItem('hrd_role');
+  const showRev=role!=='cashier';
+  const showExp=role!=='receivables';
+  $('mRevZ').style.display=showRev?'':'none';
+  $('mExpZ').style.display=showExp?'':'none';
+  $('mGoBtn').disabled=!mGoBtnEnabled();
   if(appData?.lastUpdated)$('metaTs').textContent='Last updated: '+appData.lastUpdated;
   $('modal').classList.add('on');
 }
@@ -716,9 +731,18 @@ function closeModal(){$('modal').classList.remove('on');hideErr()}
 function runParse(){
   hideErr();$('spin').classList.add('on');
   setTimeout(()=>{
-    try{localStorage.removeItem('hrd_data');
-      const revenue=parseRevenue(),expenses=parseExpenses();
-      if(!Object.keys(revenue).length){$('spin').classList.remove('on');showErr('No valid revenue sheets found.');return}
+    try{
+      // Start from existing appData so partial updates preserve the other half
+      let revenue=appData&&appData.revenue?appData.revenue:{};
+      let expenses=appData&&Array.isArray(appData.expenses)?appData.expenses:[];
+      if(revWB){
+        revenue=parseRevenue();
+        if(!Object.keys(revenue).length){$('spin').classList.remove('on');showErr('No valid revenue sheets found.');return}
+      }
+      if(expWB){expenses=parseExpenses()}
+      if(!revWB&&!expWB){$('spin').classList.remove('on');showErr('No file selected 未选择文件.');return}
+      // First-time upload: purge old cache so structure is rebuilt cleanly
+      if(!appData)localStorage.removeItem('hrd_data');
       appData={lastUpdated:dateStr(new Date()),revenue,expenses};
       saveData();showDashboard();
       // Push to Supabase (fire-and-forget — don't block UI)
