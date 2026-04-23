@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>HRD Finance Dashboard | Health Reach Diagnostics</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --primary:#274C39;--primary-dark:#1a3527;--primary-light:#3d7355;
+  --bg:#f4f6fa;--card:#fff;--text:#1f2937;--muted:#6b7280;--border:#e5e7eb;
+  --green:#16a34a;--green-bg:#dcfce7;
+  --amber:#d97706;--amber-bg:#fef3c7;
+  --red:#dc2626;--red-bg:#fee2e2;
+  --gray:#9ca3af;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+header{background:#274C39;color:#fff;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;box-shadow:var(--shadow)}
+header .brand{display:flex;align-items:center;gap:12px}
+header .logo{width:36px;height:36px;background:#fff;color:#274C39;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px}
+header h1{font-size:17px;font-weight:600;letter-spacing:.3px}
+header .sub{font-size:12px;opacity:.85;font-weight:400;display:block;margin-top:1px}
+.header-right{display:flex;gap:12px;align-items:center;font-size:13px}
+.header-right label{color:#fff}
+.header-right select{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);padding:6px 10px;border-radius:4px;font-size:13px;font-family:inherit}
+.header-right select option{color:#000}
+
+nav{background:#fff;padding:0 28px;display:flex;gap:4px;border-bottom:1px solid var(--border);box-shadow:var(--shadow)}
+nav button{background:none;border:none;padding:14px 22px;font-size:14px;cursor:pointer;color:var(--muted);font-weight:500;border-bottom:3px solid transparent;transition:all .2s;font-family:inherit}
+nav button:hover{color:var(--primary)}
+nav button.active{color:var(--primary);border-bottom-color:#274C39}
+
+main{padding:24px 28px;max-width:1600px;margin:0 auto}
+.page{display:none}.page.active{display:block}
+h2{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--primary)}
+.page-sub{color:var(--muted);margin-bottom:20px;font-size:13px}
+.card{background:var(--card);border-radius:8px;padding:18px;box-shadow:var(--shadow);margin-bottom:18px}
+.card h3{font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+
+.kpi{background:var(--card);border-radius:8px;padding:16px;box-shadow:var(--shadow);border-left:4px solid var(--primary);min-height:100px}
+.kpi.green{border-left-color:var(--green)}
+.kpi.amber{border-left-color:var(--amber)}
+.kpi.red{border-left-color:var(--red)}
+.kpi .label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.kpi .value{font-size:22px;font-weight:700;margin-top:6px;color:var(--text);word-break:break-all}
+.kpi .value.green{color:var(--green)}
+.kpi .value.red{color:var(--red)}
+.kpi .value.amber{color:var(--amber)}
+.kpi .meta{font-size:12px;color:var(--muted);margin-top:3px}
+.kpi .delta{font-size:12px;font-weight:600;margin-top:3px}
+.kpi .delta.up{color:var(--green)}.kpi .delta.down{color:var(--red)}
+
+/* Upload bar */
+.upload-bar{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.upload-bar .ubtn{flex:1;min-width:300px;background:#fff;border:2px dashed var(--primary-light);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all .2s}
+.upload-bar .ubtn:hover{background:#eaf2ed;border-color:var(--primary)}
+.upload-bar .ubtn strong{color:var(--primary);font-size:14px;font-weight:600}
+.upload-bar .ustatus{font-size:12px;color:var(--gray);font-weight:600}
+.upload-bar .ustatus.ok{color:var(--green)}
+input[type=file]{display:none}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;background:#f8fafc;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover{background:#fafbfc}
+tfoot td{background:#f8fafc;font-weight:700;font-size:13px;color:var(--primary)}
+
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.dot.green{background:var(--green)}
+.dot.gray{background:var(--gray)}
+.dot.amber{background:var(--amber)}
+.dot.red{background:var(--red)}
+
+.badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600}
+.badge.green{background:var(--green-bg);color:#166534}
+.badge.amber{background:var(--amber-bg);color:#92400e}
+.badge.red{background:var(--red-bg);color:#991b1b}
+.badge.gray{background:#f1f5f9;color:var(--muted)}
+
+input,select,textarea{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(39,76,57,.15)}
+label{font-size:12px;color:var(--muted);font-weight:500}
+
+button.btn{background:var(--primary);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:background .2s}
+button.btn:hover{background:var(--primary-dark)}
+button.btn.outline{background:#fff;color:var(--primary);border:1px solid var(--primary)}
+button.btn.outline:hover{background:#eaf2ed}
+button.btn.small{padding:5px 10px;font-size:12px}
+
+.alert{padding:12px 16px;border-radius:8px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.alert.amber{background:var(--amber-bg);color:#92400e;border-left:4px solid var(--amber)}
+.alert.red{background:var(--red-bg);color:#991b1b;border-left:4px solid var(--red)}
+.alert.green{background:var(--green-bg);color:#166534;border-left:4px solid var(--green)}
+.alert-icon{font-size:20px;line-height:1}
+.alert-body{flex:1;font-size:13px}
+.alert-body strong{display:block;margin-bottom:2px;font-size:14px}
+
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.toolbar .spacer{flex:1}
+
+.chart-box{position:relative;height:280px}
+.chart-box.tall{height:340px}
+.chart-empty{display:flex;align-items:center;justify-content:center;height:280px;color:var(--muted);font-size:13px;background:#fafbfc;border-radius:6px}
+
+.tabs-inner{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-radius:6px;width:fit-content}
+.tabs-inner button{background:none;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);font-family:inherit}
+.tabs-inner button.active{background:#fff;color:var(--primary);box-shadow:var(--shadow)}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.text-right{text-align:right}.text-muted{color:var(--muted)}.small{font-size:12px}
+.scroll-y{max-height:500px;overflow-y:auto}
+.scroll-x{overflow-x:auto}
+
+@media print{header,nav,.no-print{display:none!important}body{background:#fff}.card{box-shadow:none;border:1px solid var(--border)}}
+@media (max-width:1100px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">H</div>
+    <div>
+      <h1>HRD Finance Dashboard</h1>
+      <span class="sub">Health Reach Diagnostics · Financial Reconciliation System</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <label>当前用户 Current User:</label>
+    <select id="currentUser">
+      <option>Finance Manager 财务经理</option>
+      <option>Cashier 出纳</option>
+      <option>Accountant 会计</option>
+    </select>
+  </div>
+</header>
+
+<nav>
+  <button data-page="dashboard" class="active">📊 仪表盘 Dashboard</button>
+  <button data-page="revenue">💰 收入 Revenue</button>
+  <button data-page="expenses">💸 支出 Expenses</button>
+  <button data-page="reconcile">✅ 对账 Reconciliation</button>
+  <button data-page="reports">📈 报表 Reports</button>
+</nav>
+
+<main>
+
+<!-- ============ DASHBOARD ============ -->
+<section id="page-dashboard" class="page active">
+  <h2>仪表盘 Dashboard</h2>
+  <div class="page-sub">日清日结 · 今日财务概览 · Daily financial overview</div>
+
+  <!-- Upload Bar -->
+  <div class="upload-bar">
+    <label class="ubtn">
+      <strong>📤 上传收入表 Upload Revenue Excel</strong>
+      <span class="ustatus" id="revStatus">未上传 Not uploaded</span>
+      <input type="file" id="revFile" accept=".xlsx,.xls">
+    </label>
+    <label class="ubtn">
+      <strong>📤 上传支出表 Upload Expenses Excel</strong>
+      <span class="ustatus" id="expStatus">未上传 Not uploaded</span>
+      <input type="file" id="expFile" accept=".xlsx,.xls">
+    </label>
+  </div>
+
+  <!-- KPI Row 1 -->
+  <div class="grid-4">
+    <div class="kpi green"><div class="label">今日总收入 Total Revenue Today</div><div class="value" id="kpi1">—</div><div class="meta" id="kpi1meta">—</div></div>
+    <div class="kpi red"><div class="label">今日总支出 Total Expenses Today</div><div class="value" id="kpi2">—</div><div class="meta" id="kpi2meta">—</div></div>
+    <div class="kpi" id="kpi3Card"><div class="label">净现金流 Net Cash Flow</div><div class="value" id="kpi3">—</div><div class="meta">收入 − 支出</div></div>
+    <div class="kpi" id="kpi4Card"><div class="label">对账状态 Reconciliation Status</div><div class="value" id="kpi4" style="font-size:18px">—</div><div class="meta" id="kpi4meta">—</div></div>
+  </div>
+
+  <!-- KPI Row 2 -->
+  <div class="grid-4">
+    <div class="kpi"><div class="label">本月收入 MTD Revenue</div><div class="value" id="kpi5">—</div><div class="delta" id="kpi5delta">—</div></div>
+    <div class="kpi"><div class="label">本周收入 Weekly Revenue</div><div class="value" id="kpi6">—</div><div class="delta" id="kpi6delta">—</div></div>
+    <div class="kpi"><div class="label">本月支出 MTD Expenses</div><div class="value" id="kpi7">—</div><div class="meta" id="kpi7meta">—</div></div>
+    <div class="kpi"><div class="label">本月净额 MTD Net</div><div class="value" id="kpi8">—</div><div class="meta">本月收入 − 本月支出</div></div>
+  </div>
+
+  <!-- Risk Alerts -->
+  <div class="card">
+    <h3>⚠ 风险提示 Risk Alerts</h3>
+    <div id="alertsBox"><div class="alert green"><div class="alert-icon">✅</div><div class="alert-body"><strong>暂无数据 No data</strong>上传数据后显示风险提示 · Upload data to see risk alerts</div></div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid-2">
+    <div class="card"><h3>按科室收入 Revenue by Service (本月 MTD)</h3><div id="chart1Wrap" class="chart-box"><canvas id="chart1"></canvas></div></div>
+    <div class="card"><h3>按分院收入 Revenue by Branch (本月 MTD)</h3><div id="chart2Wrap" class="chart-box"><canvas id="chart2"></canvas></div></div>
+  </div>
+  <div class="card"><h3>近30天收入趋势 Last 30 Days Revenue Trend</h3><div id="chart3Wrap" class="chart-box tall"><canvas id="chart3"></canvas></div></div>
+  <div class="card"><h3>支出类别分布 Expenses by Category (本月 MTD)</h3><div id="chart4Wrap" class="chart-box tall"><canvas id="chart4"></canvas></div></div>
+
+  <!-- 5-Source Reconciliation Checklist -->
+  <div class="card">
+    <h3>📋 五大来源对账清单 Five-Source Reconciliation Checklist</h3>
+    <table>
+      <thead><tr><th>来源 Source</th><th>数据状态 Data Status</th><th>说明 Notes</th></tr></thead>
+      <tbody id="checklistBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ REVENUE ============ -->
+<section id="page-revenue" class="page">
+  <h2>收入 Revenue</h2>
+  <div class="page-sub">按日期范围与分院查看收入明细 · Revenue details by date range and branch</div>
+  <div class="card">
+    <div class="toolbar">
+      <label>起始日期 From:</label><input type="date" id="revFrom">
+      <label>结束日期 To:</label><input type="date" id="revTo">
+      <label>分院 Branch:</label>
+      <select id="revBranch">
+        <option value="">全部 All</option>
+        <option value="HQ">HQ</option>
+        <option value="Upper Hill">Upper Hill</option>
+        <option value="Kitengela">Kitengela</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="btn outline small" id="revExportBtn">📥 导出CSV Export CSV</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>收入明细 Revenue Detail <span id="revCount" class="small text-muted"></span></h3>
+    <div class="scroll-x scroll-y">
+      <table id="revenueTable">
+        <thead><tr><th>日期 Date</th><th>分院 Branch</th><th>科室 Service</th><th class="text-right">金额 Amount (KES)</th><th>支付方式 Payment</th><th>备注 Notes</th></tr></thead>
+        <tbody id="revenueBody"></tbody>
+        <tfoot id="revenueFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ EXPENSES ============ -->
+<section id="page-expenses" class="page">
+  <h2>支出 Expenses</h2>
+  <div class="page-sub">按类别与日期查看支出明细 · Expense details by category and date</div>
+  <div class="card">
+    <div class="toolbar">
+      <label>起始日期 From:</label><input type="date" id="expFrom">
+      <label>结束日期 To:</label><input type="date" id="expTo">
+      <label>类别 Category:</label>
+      <select id="expCategory">
+        <option value="">全部 All</option>
+        <option>Office</option><option>Vehicle</option><option>Utility</option>
+        <option>Operations</option><option>Marketing</option><option>Capital</option>
+        <option>Salary</option><option>Clinic</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="btn outline small" id="expExportBtn">📥 导出CSV Export CSV</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>支出明细 Expense Detail <span id="expCount" class="small text-muted"></span></h3>
+    <div class="scroll-x scroll-y">
+      <table id="expenseTable">
+        <thead><tr><th>日期 Date</th><th>类别 Category</th><th>描述 Description</th><th>收据号 Receipt No</th><th class="text-right">金额 Amount (KES)</th></tr></thead>
+        <tbody id="expenseBody"></tbody>
+        <tfoot id="expenseFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RECONCILIATION ============ -->
+<section id="page-reconcile" class="page">
+  <h2>对账 Reconciliation</h2>
+  <div class="page-sub">每日五大来源核对与关账 · Daily five-source reconciliation</div>
+  <div class="card">
+    <div class="toolbar">
+      <label>对账日期 Date:</label><input type="date" id="recDate">
+      <span class="spacer"></span>
+      <span id="recBadge"></span>
+      <button class="btn" id="recCloseBtn">🔒 关闭当日账目 Close Day</button>
+    </div>
+    <table>
+      <thead><tr><th>来源 Source</th><th class="text-right">录入金额 Amount Entered (KES)</th><th>备注 Notes</th><th>状态 Status</th></tr></thead>
+      <tbody id="recBody"></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>对账历史 Reconciliation History</h3>
+    <table>
+      <thead><tr><th>日期 Date</th><th>状态 Status</th><th>关账人 Closed By</th><th>时间戳 Timestamp</th></tr></thead>
+      <tbody id="recHistBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ REPORTS ============ -->
+<section id="page-reports" class="page">
+  <h2>报表 Reports</h2>
+  <div class="page-sub">日报 / 周报 / 月报 · Daily / Weekly / Monthly</div>
+  <div class="card">
+    <div class="toolbar">
+      <div class="tabs-inner" id="reportTabs">
+        <button data-mode="daily" class="active">日报 Daily</button>
+        <button data-mode="weekly">周报 Weekly</button>
+        <button data-mode="monthly">月报 Monthly</button>
+      </div>
+      <span class="spacer"></span>
+      <span id="reportPickerWrap">
+        <label>日期 Date:</label>
+        <input type="date" id="reportDate">
+      </span>
+      <button class="btn outline small" id="reportExportBtn">📥 导出CSV Export CSV</button>
+      <button class="btn outline small no-print" onclick="window.print()">🖨️ 打印 Print</button>
+    </div>
+  </div>
+  <div id="reportContent"></div>
+</section>
+
+</main>
+
+<script>
+/* ================================================================
+   STORAGE KEYS
+   ================================================================ */
+const KEY_REV='revenueData';
+const KEY_EXP='expensesData';
+const KEY_REC='reconciliationStatus';
+const KEY_USER='currentUser';
+
+function loadJSON(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+function saveJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
+
+/* ================================================================
+   SERVICE & CATEGORY MAPS
+   ================================================================ */
+const REV_ROW_MAP={
+  7:'GP Consultation',8:'GP Service Fee',9:'Laboratory',10:'Pharmacy',
+  11:'Radiology-Ultrasound',12:'Radiology-Xray',14:'ANC',15:'Referrals',
+  17:'Fullcare',18:'Food Handlers',19:'Wellness',20:'DOSH',
+  22:'Credit-Deliverance Church',23:'Credit-Odysseus',24:'Credit-Castle Garden',25:'Credit-Isinya Roses'
+};
+const REV_SERVICES=['GP Consultation','GP Service Fee','Laboratory','Pharmacy','Radiology-Ultrasound','Radiology-Xray','ANC','Referrals','Fullcare','Food Handlers','Wellness','DOSH','Credit-Deliverance Church','Credit-Odysseus','Credit-Castle Garden','Credit-Isinya Roses'];
+const CHART_SERVICE_GROUPS=['GP Consultation','Laboratory','Pharmacy','Radiology-Ultrasound','Radiology-Xray','ANC','Referrals','Fullcare','Food Handlers','Wellness','DOSH','Credit Clients'];
+const EXP_SHEET_MAP={
+  'OFFICE EXPENSES':'Office','VEHICLE EXPENSES':'Vehicle','UTILITY EXPENSES':'Utility',
+  'OPERATIONS EXPENSES':'Operations','MARKETING EXPENSES':'Marketing','CAPITAL EXPENSES':'Capital',
+  'SALARY EXPENSES':'Salary','CLINIC EXPENSES':'Clinic'
+};
+const EXP_CATS=['Office','Vehicle','Utility','Operations','Marketing','Capital','Salary','Clinic'];
+const BRANCHES=['HQ','Upper Hill','Kitengela'];
+
+/* ================================================================
+   UTILITIES
+   ================================================================ */
+function today(){return new Date().toISOString().slice(0,10)}
+function fmtKES(n){if(n==null||isNaN(n))return 'KES 0';return 'KES '+Math.round(n).toLocaleString('en-US')}
+function fmtNum(n){if(n==null||isNaN(n))return '0';return Math.round(n).toLocaleString('en-US')}
+function pct(n){if(n==null||isNaN(n)||!isFinite(n))return '—';return (n>=0?'+':'')+n.toFixed(1)+'%'}
+function daysAgo(n,base){const d=base?new Date(base):new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)}
+function monthStart(d){const x=new Date(d);x.setDate(1);return x.toISOString().slice(0,10)}
+function monthEnd(d){const x=new Date(d);return new Date(x.getFullYear(),x.getMonth()+1,0).toISOString().slice(0,10)}
+function weekStart(d){const x=new Date(d);const day=x.getDay();const diff=day===0?6:day-1;x.setDate(x.getDate()-diff);return x.toISOString().slice(0,10)}
+
+// Excel serial → YYYY-MM-DD
+function excelSerialToDate(serial){
+  const ms=Math.round((serial-25569)*86400*1000);
+  const d=new Date(ms);
+  if(isNaN(d))return null;
+  return d.toISOString().slice(0,10);
+}
+function parseCellDate(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date)return isNaN(v)?null:v.toISOString().slice(0,10);
+  if(typeof v==='number')return excelSerialToDate(v);
+  if(typeof v==='string'){
+    const s=v.trim();
+    let m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if(m){let y=m[3];y=y.length===2?'20'+y:y;return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}
+    m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    const d=new Date(s);if(!isNaN(d))return d.toISOString().slice(0,10);
+  }
+  return null;
+}
+function parseNumber(v){if(v==null||v==='')return 0;if(typeof v==='number')return isNaN(v)?0:v;if(typeof v==='string'){const n=parseFloat(v.replace(/[^0-9.\-]/g,''));return isNaN(n)?0:n}return 0}
+function detectBranch(sheetName){
+  const s=sheetName||'';
+  if(s.includes('Upper Hill')||/\bUpper\b/i.test(s))return 'Upper Hill';
+  if(s.includes('Kitengela'))return 'Kitengela';
+  return 'HQ';
+}
+
+/* ================================================================
+   EXCEL PARSING
+   ================================================================ */
+function parseRevenueWorkbook(wb){
+  const out=[];
+  wb.SheetNames.forEach(sheetName=>{
+    if(sheetName==='Summary - 2026'||sheetName==='Summary-2025'||/^summary/i.test(sheetName))return;
+    const ws=wb.Sheets[sheetName];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    if(!aoa||aoa.length<6)return;
+    const branch=detectBranch(sheetName);
+    const headerRow=aoa[4]||[];
+    const dateCols=[];
+    for(let c=4;c<headerRow.length;c++){
+      const d=parseCellDate(headerRow[c]);
+      if(d)dateCols.push({col:c,date:d});
+    }
+    Object.entries(REV_ROW_MAP).forEach(([rowIdx,service])=>{
+      const r=aoa[+rowIdx];if(!r)return;
+      dateCols.forEach(dc=>{
+        const amt=parseNumber(r[dc.col]);
+        out.push({date:dc.date,branch,service,amount:amt||0,sheet:sheetName});
+      });
+    });
+  });
+  return out;
+}
+
+function parseExpensesWorkbook(wb){
+  const out=[];
+  wb.SheetNames.forEach(sheetName=>{
+    if(sheetName==='SUMMARY'||/^summary$/i.test(sheetName))return;
+    const key=sheetName.toUpperCase().trim();
+    const category=EXP_SHEET_MAP[key]||sheetName.replace(/ EXPENSES$/i,'').trim();
+    const ws=wb.Sheets[sheetName];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    if(!aoa||aoa.length<2)return;
+    for(let i=1;i<aoa.length;i++){
+      const r=aoa[i];if(!r)continue;
+      const d=parseCellDate(r[0]);
+      const amt=parseNumber(r[3]);
+      if(!d||!amt||amt===0)continue;
+      out.push({
+        date:d,category,
+        description:(r[1]==null?'':String(r[1])).trim(),
+        receipt_no:(r[2]==null?'':String(r[2])).trim(),
+        amount:amt
+      });
+    }
+  });
+  return out;
+}
+
+/* ================================================================
+   UPLOAD HANDLERS
+   ================================================================ */
+document.getElementById('revFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const s=document.getElementById('revStatus');s.className='ustatus';s.textContent='解析中... Parsing...';
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{cellDates:true,cellNF:false});
+    const data=parseRevenueWorkbook(wb);
+    saveJSON(KEY_REV,data);
+    s.className='ustatus ok';s.textContent=`✓ 已上传 Uploaded (${data.length})`;
+    refreshAll();
+  }catch(err){console.error(err);s.className='ustatus';s.style.color='var(--red)';s.textContent='✗ 解析失败 Parse failed';}
+});
+document.getElementById('expFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const s=document.getElementById('expStatus');s.className='ustatus';s.textContent='解析中... Parsing...';
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{cellDates:true,cellNF:false});
+    const data=parseExpensesWorkbook(wb);
+    saveJSON(KEY_EXP,data);
+    s.className='ustatus ok';s.textContent=`✓ 已上传 Uploaded (${data.length})`;
+    refreshAll();
+  }catch(err){console.error(err);s.className='ustatus';s.style.color='var(--red)';s.textContent='✗ 解析失败 Parse failed';}
+});
+
+/* ================================================================
+   NAV
+   ================================================================ */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+b.dataset.page).classList.add('active');
+    refreshAll();
+  });
+});
+
+/* ================================================================
+   DATA ACCESS
+   ================================================================ */
+function getRev(){return loadJSON(KEY_REV,[])}
+function getExp(){return loadJSON(KEY_EXP,[])}
+function getRec(){return loadJSON(KEY_REC,{})}
+function filterRev(f){const r=getRev();return r.filter(x=>(!f.from||x.date>=f.from)&&(!f.to||x.date<=f.to)&&(!f.branch||x.branch===f.branch)&&(!f.service||x.service===f.service))}
+function filterExp(f){const r=getExp();return r.filter(x=>(!f.from||x.date>=f.from)&&(!f.to||x.date<=f.to)&&(!f.category||x.category===f.category))}
+function sumRev(f){return filterRev(f).reduce((a,b)=>a+(b.amount||0),0)}
+function sumExp(f){return filterExp(f).reduce((a,b)=>a+(b.amount||0),0)}
+function sumBy(arr,keyFn,valFn){const m={};arr.forEach(x=>{const k=keyFn(x);m[k]=(m[k]||0)+valFn(x)});return m}
+
+/* ================================================================
+   DASHBOARD
+   ================================================================ */
+let charts={};
+function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){}});charts={}}
+
+function renderDashboard(){
+  const rev=getRev(),exp=getExp(),rec=getRec();
+  const hasRev=rev.length>0,hasExp=exp.length>0;
+
+  // Upload status
+  document.getElementById('revStatus').className=hasRev?'ustatus ok':'ustatus';
+  if(!document.getElementById('revStatus').textContent.includes('✓'))
+    document.getElementById('revStatus').textContent=hasRev?`✓ 已上传 Uploaded (${rev.length})`:'未上传 Not uploaded';
+  document.getElementById('expStatus').className=hasExp?'ustatus ok':'ustatus';
+  if(!document.getElementById('expStatus').textContent.includes('✓'))
+    document.getElementById('expStatus').textContent=hasExp?`✓ 已上传 Uploaded (${exp.length})`:'未上传 Not uploaded';
+
+  // Reference date
+  const t=today();
+  const allDates=[...rev.map(r=>r.date),...exp.map(e=>e.date)].sort();
+  const hasDataToday=allDates.includes(t);
+  const refDate=hasRev||hasExp?(hasDataToday?t:(allDates[allDates.length-1]||t)):t;
+  const usingLatest=!hasDataToday&&(hasRev||hasExp);
+
+  // KPI 1-4
+  if(hasRev||hasExp){
+    const rT=sumRev({from:refDate,to:refDate});
+    const eT=sumExp({from:refDate,to:refDate});
+    document.getElementById('kpi1').textContent=fmtKES(rT);
+    document.getElementById('kpi1meta').textContent=usingLatest?`最新数据: ${refDate}`:refDate;
+    document.getElementById('kpi2').textContent=fmtKES(eT);
+    document.getElementById('kpi2meta').textContent=usingLatest?`最新数据: ${refDate}`:refDate;
+    const net=rT-eT;
+    const k3=document.getElementById('kpi3');
+    k3.textContent=fmtKES(net);
+    k3.className='value '+(net>=0?'green':'red');
+    document.getElementById('kpi3Card').className='kpi '+(net>=0?'green':'red');
+
+    const closed=rec[refDate]&&rec[refDate].status==='closed';
+    const k4=document.getElementById('kpi4');
+    k4.textContent=closed?'已对账 Reconciled':'待对账 Pending';
+    k4.className='value '+(closed?'green':'amber');
+    document.getElementById('kpi4Card').className='kpi '+(closed?'green':'amber');
+    document.getElementById('kpi4meta').textContent=closed?`关账人: ${rec[refDate].closedBy||'—'}`:'未关账';
+  }else{
+    ['kpi1','kpi2','kpi3','kpi4'].forEach(id=>{document.getElementById(id).textContent='—';document.getElementById(id).className='value'});
+    document.getElementById('kpi1meta').textContent='—';
+    document.getElementById('kpi2meta').textContent='—';
+    document.getElementById('kpi4meta').textContent='—';
+    document.getElementById('kpi3Card').className='kpi';
+    document.getElementById('kpi4Card').className='kpi';
+  }
+
+  // KPI 5-8
+  if(hasRev||hasExp){
+    const mtd={from:monthStart(refDate),to:refDate};
+    const pmtdFrom=monthStart(new Date(new Date(refDate).getFullYear(),new Date(refDate).getMonth()-1,1).toISOString().slice(0,10));
+    const prevMonthEnd=new Date(new Date(refDate).getFullYear(),new Date(refDate).getMonth(),0);
+    const dayOfMonth=new Date(refDate).getDate();
+    const pmtdTo=new Date(prevMonthEnd.getFullYear(),prevMonthEnd.getMonth(),Math.min(dayOfMonth,prevMonthEnd.getDate())).toISOString().slice(0,10);
+    const pmtd={from:pmtdFrom,to:pmtdTo};
+
+    const mtdRev=sumRev(mtd),pmtdRev=sumRev(pmtd);
+    const mtdExp=sumExp(mtd);
+    document.getElementById('kpi5').textContent=fmtKES(mtdRev);
+    const d5=document.getElementById('kpi5delta');
+    const mtdDelta=pmtdRev?((mtdRev-pmtdRev)/pmtdRev)*100:null;
+    d5.textContent=mtdDelta==null?'— 无上期数据':pct(mtdDelta)+' vs 上月同期';
+    d5.className='delta '+(mtdDelta==null?'':(mtdDelta>=0?'up':'down'));
+
+    const wkFrom=daysAgo(6,refDate),wkTo=refDate;
+    const pwkFrom=daysAgo(13,refDate),pwkTo=daysAgo(7,refDate);
+    const wkRev=sumRev({from:wkFrom,to:wkTo});
+    const pwkRev=sumRev({from:pwkFrom,to:pwkTo});
+    document.getElementById('kpi6').textContent=fmtKES(wkRev);
+    const d6=document.getElementById('kpi6delta');
+    const wkDelta=pwkRev?((wkRev-pwkRev)/pwkRev)*100:null;
+    d6.textContent=wkDelta==null?'— 无上周数据':pct(wkDelta)+' vs 上周';
+    d6.className='delta '+(wkDelta==null?'':(wkDelta>=0?'up':'down'));
+
+    document.getElementById('kpi7').textContent=fmtKES(mtdExp);
+    document.getElementById('kpi7meta').textContent=`${mtd.from} → ${mtd.to}`;
+    document.getElementById('kpi8').textContent=fmtKES(mtdRev-mtdExp);
+  }else{
+    ['kpi5','kpi6','kpi7','kpi8'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('kpi5delta').textContent='—';
+    document.getElementById('kpi6delta').textContent='—';
+    document.getElementById('kpi7meta').textContent='—';
+  }
+
+  // Risk alerts
+  renderAlerts(refDate);
+
+  // Charts
+  renderCharts(refDate);
+
+  // 5-source checklist
+  const checklist=[
+    {label:'收入Dashboard Revenue Dashboard',status:hasRev?'green':'gray',note:hasRev?'✓ 已上传 Excel data loaded':'待上传收入表 Awaiting Revenue upload'},
+    {label:'银行流水 Bank Statement',status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'},
+    {label:'M-Pesa流水 M-Pesa Statement',status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'},
+    {label:'现金记录 Cash Statement',status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'},
+    {label:'HMIS记录 HMIS Records',status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'}
+  ];
+  document.getElementById('checklistBody').innerHTML=checklist.map(c=>{
+    const txt=c.status==='green'?'已录入 Loaded':'未录入 Pending';
+    return `<tr><td><strong>${c.label}</strong></td><td><span class="dot ${c.status}"></span>${txt}</td><td class="small text-muted">${c.note}</td></tr>`;
+  }).join('');
+}
+
+function renderAlerts(refDate){
+  const box=document.getElementById('alertsBox');
+  const rev=getRev(),exp=getExp();
+  if(!rev.length&&!exp.length){
+    box.innerHTML='<div class="alert green"><div class="alert-icon">✅</div><div class="alert-body"><strong>暂无数据 No data</strong>上传数据后显示风险提示 · Upload data to see risk alerts</div></div>';
+    return;
+  }
+  const alerts=[];
+
+  // Alert 1: large expense > 100k
+  const big=exp.filter(e=>e.amount>100000).sort((a,b)=>b.amount-a.amount).slice(0,5);
+  big.forEach(e=>{
+    alerts.push({level:'amber',icon:'💸',title:'大额支出警告 Large Expense Alert',body:`${e.date} · ${e.category} · ${e.description||'—'} · ${fmtKES(e.amount)}`});
+  });
+
+  // Alert 2: negative net today
+  const rT=sumRev({from:refDate,to:refDate}),eT=sumExp({from:refDate,to:refDate});
+  if((rT>0||eT>0)&&(rT-eT)<0){
+    alerts.push({level:'red',icon:'📉',title:'今日现金流为负 Negative Cash Flow Today',body:`${refDate} · 收入 ${fmtKES(rT)} − 支出 ${fmtKES(eT)} = ${fmtKES(rT-eT)}`});
+  }
+
+  // Alert 3: any service category with 0 for 3+ consecutive days in current month
+  const mFrom=monthStart(refDate),mTo=refDate;
+  const days=[];let dt=new Date(mFrom);const end=new Date(mTo);
+  while(dt<=end){days.push(dt.toISOString().slice(0,10));dt.setDate(dt.getDate()+1)}
+  REV_SERVICES.forEach(svc=>{
+    let streak=0,maxStreak=0,endDay='';
+    days.forEach(d=>{
+      const sum=filterRev({from:d,to:d,service:svc}).reduce((a,b)=>a+b.amount,0);
+      if(sum===0){streak++;if(streak>maxStreak){maxStreak=streak;endDay=d}}else{streak=0}
+    });
+    if(maxStreak>=3){
+      alerts.push({level:'amber',icon:'⚠️',title:`${svc}: 连续${maxStreak}天零收入 ${maxStreak} consecutive zero-revenue days`,body:`截止 ${endDay} · 请核查数据录入 Verify data entry`});
+    }
+  });
+
+  // Alert 4: MTD expenses > 80% of MTD revenue
+  const mtdRev=sumRev({from:mFrom,to:mTo}),mtdExp=sumExp({from:mFrom,to:mTo});
+  if(mtdRev>0&&mtdExp/mtdRev>0.8){
+    alerts.push({level:'amber',icon:'🚨',title:'支出超警戒线 Expenses Exceed 80% of Revenue',body:`本月支出 ${fmtKES(mtdExp)} / 本月收入 ${fmtKES(mtdRev)} = ${((mtdExp/mtdRev)*100).toFixed(1)}%`});
+  }
+
+  if(!alerts.length){
+    box.innerHTML='<div class="alert green"><div class="alert-icon">✅</div><div class="alert-body"><strong>风险正常 All Clear</strong>未检测到风险 · No risks detected</div></div>';
+  }else{
+    box.innerHTML=alerts.map(a=>`<div class="alert ${a.level}"><div class="alert-icon">${a.icon}</div><div class="alert-body"><strong>${a.title}</strong>${a.body}</div></div>`).join('');
+  }
+}
+
+function renderCharts(refDate){
+  destroyCharts();
+  const rev=getRev(),exp=getExp();
+  const mFrom=monthStart(refDate),mTo=monthEnd(refDate);
+
+  // Chart 1: horizontal bar — revenue by service group (MTD)
+  const w1=document.getElementById('chart1Wrap');
+  if(!rev.length){w1.innerHTML='<div class="chart-empty">上传数据后显示 Upload data to view</div>'}
+  else{
+    w1.innerHTML='<canvas id="chart1"></canvas>';
+    const mtdRev=filterRev({from:mFrom,to:mTo});
+    const groupSums={};CHART_SERVICE_GROUPS.forEach(g=>groupSums[g]=0);
+    mtdRev.forEach(r=>{
+      if(r.service.startsWith('Credit-'))groupSums['Credit Clients']+=r.amount;
+      else if(groupSums[r.service]!==undefined)groupSums[r.service]+=r.amount;
+    });
+    charts.c1=new Chart(document.getElementById('chart1'),{
+      type:'bar',
+      data:{labels:CHART_SERVICE_GROUPS,datasets:[{data:CHART_SERVICE_GROUPS.map(g=>groupSums[g]),backgroundColor:'#274C39'}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>fmtNum(v)}}}}
+    });
+  }
+
+  // Chart 2: vertical bar — revenue by branch (MTD)
+  const w2=document.getElementById('chart2Wrap');
+  if(!rev.length){w2.innerHTML='<div class="chart-empty">上传数据后显示 Upload data to view</div>'}
+  else{
+    w2.innerHTML='<canvas id="chart2"></canvas>';
+    const mtdRev=filterRev({from:mFrom,to:mTo});
+    const br={};BRANCHES.forEach(b=>br[b]=0);
+    mtdRev.forEach(r=>{if(br[r.branch]!==undefined)br[r.branch]+=r.amount});
+    charts.c2=new Chart(document.getElementById('chart2'),{
+      type:'bar',
+      data:{labels:BRANCHES,datasets:[{data:BRANCHES.map(b=>br[b]),backgroundColor:['#274C39','#3d7355','#6b9980']}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmtNum(v)}}}}
+    });
+  }
+
+  // Chart 3: line — last 30 days daily revenue trend
+  const w3=document.getElementById('chart3Wrap');
+  if(!rev.length){w3.innerHTML='<div class="chart-empty">上传数据后显示 Upload data to view</div>'}
+  else{
+    w3.innerHTML='<canvas id="chart3"></canvas>';
+    const days=[];for(let i=29;i>=0;i--)days.push(daysAgo(i,refDate));
+    const dMap=sumBy(filterRev({from:days[0],to:days[days.length-1]}),r=>r.date,r=>r.amount);
+    charts.c3=new Chart(document.getElementById('chart3'),{
+      type:'line',
+      data:{labels:days,datasets:[{label:'Daily Revenue',data:days.map(d=>dMap[d]||0),borderColor:'#274C39',backgroundColor:'rgba(39,76,57,.15)',fill:true,tension:.3}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmtNum(v)}},x:{ticks:{maxRotation:60,minRotation:45,font:{size:10}}}}}
+    });
+  }
+
+  // Chart 4: doughnut — expenses by category (MTD)
+  const w4=document.getElementById('chart4Wrap');
+  if(!exp.length){w4.innerHTML='<div class="chart-empty">上传数据后显示 Upload data to view</div>'}
+  else{
+    w4.innerHTML='<canvas id="chart4"></canvas>';
+    const mtdExp=filterExp({from:mFrom,to:mTo});
+    const cat={};EXP_CATS.forEach(c=>cat[c]=0);
+    mtdExp.forEach(e=>{if(cat[e.category]!==undefined)cat[e.category]+=e.amount});
+    const colors=['#274C39','#3d7355','#6b9980','#d97706','#dc2626','#1e40af','#7c3aed','#0891b2'];
+    charts.c4=new Chart(document.getElementById('chart4'),{
+      type:'doughnut',
+      data:{labels:EXP_CATS,datasets:[{data:EXP_CATS.map(c=>cat[c]),backgroundColor:colors}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:12}}}}}
+    });
+  }
+}
+
+/* ================================================================
+   REVENUE PAGE
+   ================================================================ */
+function renderRevenuePage(){
+  const rev=getRev();
+  const from=document.getElementById('revFrom');const to=document.getElementById('revTo');
+  if(!from.value){const allD=rev.map(r=>r.date).sort();const ref=allD.length?allD[allD.length-1]:today();from.value=monthStart(ref);to.value=ref}
+  const filter={from:from.value,to:to.value,branch:document.getElementById('revBranch').value};
+  const rows=filterRev(filter).sort((a,b)=>a.date<b.date?1:(a.date>b.date?-1:0));
+  const body=document.getElementById('revenueBody');
+  const foot=document.getElementById('revenueFoot');
+  if(!rev.length){body.innerHTML=`<tr><td colspan="6" class="empty">暂无数据 No data · 请先在仪表盘上传收入表 Please upload Revenue Excel on Dashboard</td></tr>`;foot.innerHTML='';document.getElementById('revCount').textContent='';return}
+  if(!rows.length){body.innerHTML=`<tr><td colspan="6" class="empty">当前筛选条件下无数据 No data for current filter</td></tr>`;foot.innerHTML='';document.getElementById('revCount').textContent='(0)';return}
+  document.getElementById('revCount').textContent=`(${rows.length})`;
+  body.innerHTML=rows.slice(0,1000).map(r=>`<tr><td>${r.date}</td><td>${r.branch}</td><td>${r.service}</td><td class="text-right">${fmtNum(r.amount)}</td><td class="small text-muted">—</td><td class="small text-muted">${r.sheet||''}</td></tr>`).join('');
+  const total=rows.reduce((a,b)=>a+b.amount,0);
+  foot.innerHTML=`<tr><td colspan="3">合计 Total</td><td class="text-right">${fmtKES(total)}</td><td colspan="2"></td></tr>`;
+}
+document.getElementById('revFrom').addEventListener('change',renderRevenuePage);
+document.getElementById('revTo').addEventListener('change',renderRevenuePage);
+document.getElementById('revBranch').addEventListener('change',renderRevenuePage);
+document.getElementById('revExportBtn').addEventListener('click',()=>{
+  const f={from:document.getElementById('revFrom').value,to:document.getElementById('revTo').value,branch:document.getElementById('revBranch').value};
+  const rows=filterRev(f);
+  let csv='Date,Branch,Service,Amount KES,Payment,Notes\n';
+  rows.forEach(r=>csv+=`${r.date},${r.branch},"${r.service}",${r.amount},,"${(r.sheet||'').replace(/"/g,'""')}"\n`);
+  downloadCsv(csv,`revenue-${f.from}-to-${f.to}.csv`);
+});
+
+/* ================================================================
+   EXPENSES PAGE
+   ================================================================ */
+function renderExpensesPage(){
+  const exp=getExp();
+  const from=document.getElementById('expFrom');const to=document.getElementById('expTo');
+  if(!from.value){const allD=exp.map(r=>r.date).sort();const ref=allD.length?allD[allD.length-1]:today();from.value=monthStart(ref);to.value=ref}
+  const filter={from:from.value,to:to.value,category:document.getElementById('expCategory').value};
+  const rows=filterExp(filter).sort((a,b)=>a.date<b.date?1:(a.date>b.date?-1:0));
+  const body=document.getElementById('expenseBody');const foot=document.getElementById('expenseFoot');
+  if(!exp.length){body.innerHTML=`<tr><td colspan="5" class="empty">暂无数据 No data · 请先在仪表盘上传支出表 Please upload Expenses Excel on Dashboard</td></tr>`;foot.innerHTML='';document.getElementById('expCount').textContent='';return}
+  if(!rows.length){body.innerHTML=`<tr><td colspan="5" class="empty">当前筛选条件下无数据 No data for current filter</td></tr>`;foot.innerHTML='';document.getElementById('expCount').textContent='(0)';return}
+  document.getElementById('expCount').textContent=`(${rows.length})`;
+  body.innerHTML=rows.slice(0,1000).map(r=>{
+    const style=r.amount>100000?' style="background:var(--amber-bg)"':'';
+    return `<tr${style}><td>${r.date}</td><td><span class="badge gray">${r.category}</span></td><td>${r.description||'—'}</td><td class="small">${r.receipt_no||'—'}</td><td class="text-right">${fmtNum(r.amount)}</td></tr>`;
+  }).join('');
+  const total=rows.reduce((a,b)=>a+b.amount,0);
+  foot.innerHTML=`<tr><td colspan="4">合计 Total</td><td class="text-right">${fmtKES(total)}</td></tr>`;
+}
+document.getElementById('expFrom').addEventListener('change',renderExpensesPage);
+document.getElementById('expTo').addEventListener('change',renderExpensesPage);
+document.getElementById('expCategory').addEventListener('change',renderExpensesPage);
+document.getElementById('expExportBtn').addEventListener('click',()=>{
+  const f={from:document.getElementById('expFrom').value,to:document.getElementById('expTo').value,category:document.getElementById('expCategory').value};
+  const rows=filterExp(f);
+  let csv='Date,Category,Description,Receipt No,Amount KES\n';
+  rows.forEach(r=>csv+=`${r.date},${r.category},"${(r.description||'').replace(/"/g,'""')}","${r.receipt_no||''}",${r.amount}\n`);
+  downloadCsv(csv,`expenses-${f.from}-to-${f.to}.csv`);
+});
+
+/* ================================================================
+   RECONCILIATION
+   ================================================================ */
+function renderReconcile(){
+  const di=document.getElementById('recDate');
+  if(!di.value)di.value=today();
+  const date=di.value;
+  const rec=getRec();
+  const status=rec[date];
+  const badge=document.getElementById('recBadge');
+  if(status&&status.status==='closed'){badge.innerHTML='<span class="badge green">✓ 已关账 CLOSED</span>'}
+  else{badge.innerHTML='<span class="badge amber">⏳ 待对账 PENDING</span>'}
+
+  const rev=getRev(),exp=getExp();
+  const revToday=filterRev({from:date,to:date});
+  const revTotal=revToday.reduce((a,b)=>a+b.amount,0);
+  const sources=[
+    {label:'收入Dashboard Revenue Dashboard',amount:revTotal,status:revToday.length?'green':'gray',note:revToday.length?`${revToday.length} 条记录 records`:'未录入 No data'},
+    {label:'银行流水 Bank Statement',amount:0,status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'},
+    {label:'M-Pesa流水 M-Pesa Statement',amount:0,status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'},
+    {label:'现金记录 Cash Statement',amount:0,status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'},
+    {label:'HMIS记录 HMIS Records',amount:0,status:'gray',note:'手动上传暂未实现 Manual upload not yet implemented'}
+  ];
+  document.getElementById('recBody').innerHTML=sources.map(s=>{
+    const statusTxt=s.status==='green'?'已录入 Loaded':'未录入 Pending';
+    return `<tr><td><strong>${s.label}</strong></td><td class="text-right">${fmtKES(s.amount)}</td><td class="small text-muted">${s.note}</td><td><span class="dot ${s.status}"></span>${statusTxt}</td></tr>`;
+  }).join('');
+
+  // History
+  const hist=Object.entries(rec).sort((a,b)=>a[0]<b[0]?1:-1);
+  document.getElementById('recHistBody').innerHTML=hist.length?hist.map(([d,s])=>`<tr><td>${d}</td><td><span class="badge green">${s.status}</span></td><td>${s.closedBy||'—'}</td><td class="small text-muted">${s.timestamp||'—'}</td></tr>`).join(''):`<tr><td colspan="4" class="empty">暂无对账记录 No reconciliation history</td></tr>`;
+}
+document.getElementById('recDate').addEventListener('change',renderReconcile);
+document.getElementById('recCloseBtn').addEventListener('click',()=>{
+  const date=document.getElementById('recDate').value;if(!date)return;
+  const rec=getRec();
+  const user=document.getElementById('currentUser').value;
+  rec[date]={status:'closed',closedBy:user,timestamp:new Date().toISOString().replace('T',' ').slice(0,19)};
+  saveJSON(KEY_REC,rec);
+  alert(`✅ ${date} 已关账 Day Closed`);
+  refreshAll();
+});
+
+/* ================================================================
+   REPORTS
+   ================================================================ */
+let reportMode='daily';
+document.querySelectorAll('#reportTabs button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('#reportTabs button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');reportMode=b.dataset.mode;
+    const dateInput=document.getElementById('reportDate');
+    dateInput.type=reportMode==='monthly'?'month':(reportMode==='weekly'?'week':'date');
+    dateInput.value='';
+    renderReports();
+  });
+});
+document.getElementById('reportDate').addEventListener('change',renderReports);
+document.getElementById('reportExportBtn').addEventListener('click',exportReport);
+
+function renderReports(){
+  const el=document.getElementById('reportContent');
+  const rev=getRev(),exp=getExp();
+  if(!rev.length&&!exp.length){el.innerHTML=`<div class="card empty">暂无数据 No data · 请先在仪表盘上传数据 Please upload data on Dashboard</div>`;return}
+  const di=document.getElementById('reportDate');
+
+  if(reportMode==='daily'){
+    if(!di.value){const ad=[...rev.map(r=>r.date),...exp.map(e=>e.date)].sort();di.value=ad.length?ad[ad.length-1]:today()}
+    el.innerHTML=renderDaily(di.value);
+  }else if(reportMode==='weekly'){
+    if(!di.value){const d=new Date();const y=d.getFullYear();const wk=getISOWeek(d);di.value=`${y}-W${String(wk).padStart(2,'0')}`}
+    el.innerHTML=renderWeekly(di.value);
+  }else{
+    if(!di.value){const d=new Date();di.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
+    el.innerHTML=renderMonthly(di.value);
+  }
+}
+function getISOWeek(d){const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const day=dt.getUTCDay()||7;dt.setUTCDate(dt.getUTCDate()+4-day);const ys=new Date(Date.UTC(dt.getUTCFullYear(),0,1));return Math.ceil((((dt-ys)/86400000)+1)/7)}
+function isoWeekToDates(val){const[y,w]=val.split('-W').map(Number);const simple=new Date(Date.UTC(y,0,1+(w-1)*7));const dow=simple.getUTCDay();const mon=new Date(simple);if(dow<=4)mon.setUTCDate(simple.getUTCDate()-simple.getUTCDay()+1);else mon.setUTCDate(simple.getUTCDate()+8-simple.getUTCDay());const sun=new Date(mon);sun.setUTCDate(mon.getUTCDate()+6);return {from:mon.toISOString().slice(0,10),to:sun.toISOString().slice(0,10)}}
+
+function renderDaily(d){
+  const rT=sumRev({from:d,to:d}),eT=sumExp({from:d,to:d});
+  const revBySvc=sumBy(filterRev({from:d,to:d}),r=>r.service,r=>r.amount);
+  const expByCat=sumBy(filterExp({from:d,to:d}),e=>e.category,e=>e.amount);
+  return `<div class="grid-4">
+    <div class="kpi green"><div class="label">收入 Revenue</div><div class="value">${fmtKES(rT)}</div></div>
+    <div class="kpi red"><div class="label">支出 Expenses</div><div class="value">${fmtKES(eT)}</div></div>
+    <div class="kpi ${rT-eT>=0?'green':'red'}"><div class="label">净额 Net</div><div class="value">${fmtKES(rT-eT)}</div></div>
+    <div class="kpi"><div class="label">日期 Date</div><div class="value" style="font-size:17px">${d}</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><h3>按科室收入 Revenue by Service</h3>
+      <table><thead><tr><th>科室 Service</th><th class="text-right">金额 Amount (KES)</th></tr></thead>
+      <tbody>${Object.entries(revBySvc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td class="text-right">${fmtKES(v)}</td></tr>`).join('')||'<tr><td colspan="2" class="empty">无收入 No revenue</td></tr>'}</tbody></table>
+    </div>
+    <div class="card"><h3>按类别支出 Expenses by Category</h3>
+      <table><thead><tr><th>类别 Category</th><th class="text-right">金额 Amount (KES)</th></tr></thead>
+      <tbody>${Object.entries(expByCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td class="text-right">${fmtKES(v)}</td></tr>`).join('')||'<tr><td colspan="2" class="empty">无支出 No expenses</td></tr>'}</tbody></table>
+    </div>
+  </div>`;
+}
+function renderWeekly(weekVal){
+  const {from,to}=isoWeekToDates(weekVal);
+  const days=[];let dt=new Date(from);const end=new Date(to);while(dt<=end){days.push(dt.toISOString().slice(0,10));dt.setDate(dt.getDate()+1)}
+  let wR=0,wE=0;
+  const rows=days.map(d=>{const r=sumRev({from:d,to:d}),e=sumExp({from:d,to:d});wR+=r;wE+=e;const dow=new Date(d).toLocaleDateString('zh-CN',{weekday:'short'})+' / '+new Date(d).toLocaleDateString('en',{weekday:'short'});return `<tr><td><strong>${d}</strong></td><td>${dow}</td><td class="text-right">${fmtNum(r)}</td><td class="text-right">${fmtNum(e)}</td><td class="text-right"><strong>${fmtNum(r-e)}</strong></td></tr>`}).join('');
+  return `<div class="card"><h3>周报 Weekly Report · ${weekVal} (${from} → ${to})</h3>
+    <table><thead><tr><th>日期 Date</th><th>星期 Day</th><th class="text-right">收入 Revenue (KES)</th><th class="text-right">支出 Expenses (KES)</th><th class="text-right">净额 Net (KES)</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="2">本周合计 Week Total</td><td class="text-right">${fmtKES(wR)}</td><td class="text-right">${fmtKES(wE)}</td><td class="text-right">${fmtKES(wR-wE)}</td></tr></tfoot>
+    </table></div>`;
+}
+function renderMonthly(monthVal){
+  const [y,m]=monthVal.split('-').map(Number);
+  const from=`${y}-${String(m).padStart(2,'0')}-01`;
+  const to=new Date(y,m,0).toISOString().slice(0,10);
+  const rev=filterRev({from,to}),exp=filterExp({from,to});
+  const rT=rev.reduce((a,b)=>a+b.amount,0),eT=exp.reduce((a,b)=>a+b.amount,0);
+  const bySvc=sumBy(rev,r=>r.service,r=>r.amount);
+  const byCat=sumBy(exp,e=>e.category,e=>e.amount);
+  return `<div class="grid-4">
+    <div class="kpi green"><div class="label">月收入 Month Revenue</div><div class="value">${fmtKES(rT)}</div></div>
+    <div class="kpi red"><div class="label">月支出 Month Expenses</div><div class="value">${fmtKES(eT)}</div></div>
+    <div class="kpi ${rT-eT>=0?'green':'red'}"><div class="label">月净额 Month Net</div><div class="value">${fmtKES(rT-eT)}</div></div>
+    <div class="kpi"><div class="label">支出占比 Expense Ratio</div><div class="value">${rT?((eT/rT)*100).toFixed(1):'0'}%</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><h3>月度按科室收入 Monthly Revenue by Service</h3>
+      <table><thead><tr><th>科室 Service</th><th class="text-right">金额 (KES)</th><th class="text-right">占比 %</th></tr></thead>
+      <tbody>${Object.entries(bySvc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td class="text-right">${fmtKES(v)}</td><td class="text-right">${rT?((v/rT)*100).toFixed(1):0}%</td></tr>`).join('')||'<tr><td colspan="3" class="empty">—</td></tr>'}</tbody></table>
+    </div>
+    <div class="card"><h3>月度按类别支出 Monthly Expenses by Category</h3>
+      <table><thead><tr><th>类别 Category</th><th class="text-right">金额 (KES)</th><th class="text-right">占比 %</th></tr></thead>
+      <tbody>${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td class="text-right">${fmtKES(v)}</td><td class="text-right">${eT?((v/eT)*100).toFixed(1):0}%</td></tr>`).join('')||'<tr><td colspan="3" class="empty">—</td></tr>'}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function exportReport(){
+  const di=document.getElementById('reportDate').value;if(!di)return;
+  let csv='',name='';
+  if(reportMode==='daily'){
+    name=`daily-report-${di}.csv`;
+    csv=`Daily Report,${di}\n\nREVENUE BY SERVICE\nService,Amount KES\n`;
+    Object.entries(sumBy(filterRev({from:di,to:di}),r=>r.service,r=>r.amount)).forEach(([k,v])=>csv+=`"${k}",${v}\n`);
+    csv+='\nEXPENSES BY CATEGORY\nCategory,Amount KES\n';
+    Object.entries(sumBy(filterExp({from:di,to:di}),e=>e.category,e=>e.amount)).forEach(([k,v])=>csv+=`${k},${v}\n`);
+  }else if(reportMode==='weekly'){
+    const {from,to}=isoWeekToDates(di);name=`weekly-report-${di}.csv`;
+    csv=`Weekly Report,${di},${from} to ${to}\n\nDate,Day,Revenue,Expenses,Net\n`;
+    const days=[];let dt=new Date(from);const end=new Date(to);while(dt<=end){days.push(dt.toISOString().slice(0,10));dt.setDate(dt.getDate()+1)}
+    days.forEach(d=>{const r=sumRev({from:d,to:d}),e=sumExp({from:d,to:d});csv+=`${d},${new Date(d).toLocaleDateString('en',{weekday:'short'})},${r},${e},${r-e}\n`});
+  }else{
+    const [y,m]=di.split('-').map(Number);const from=`${y}-${String(m).padStart(2,'0')}-01`;const to=new Date(y,m,0).toISOString().slice(0,10);
+    name=`monthly-report-${di}.csv`;
+    csv=`Monthly Report,${di},${from} to ${to}\n\nREVENUE BY SERVICE\nService,Amount KES\n`;
+    Object.entries(sumBy(filterRev({from,to}),r=>r.service,r=>r.amount)).forEach(([k,v])=>csv+=`"${k}",${v}\n`);
+    csv+='\nEXPENSES BY CATEGORY\nCategory,Amount KES\n';
+    Object.entries(sumBy(filterExp({from,to}),e=>e.category,e=>e.amount)).forEach(([k,v])=>csv+=`${k},${v}\n`);
+  }
+  downloadCsv(csv,name);
+}
+
+function downloadCsv(csv,name){
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+function refreshAll(){
+  renderDashboard();
+  renderRevenuePage();
+  renderExpensesPage();
+  renderReconcile();
+  renderReports();
+}
+// User persistence
+const savedUser=localStorage.getItem(KEY_USER);
+if(savedUser)document.getElementById('currentUser').value=savedUser;
+document.getElementById('currentUser').addEventListener('change',e=>localStorage.setItem(KEY_USER,e.target.value));
+refreshAll();
+</script>
+</body>
+</html>

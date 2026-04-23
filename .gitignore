@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# OneDrive/iCloud metadata
+.icloud
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
+
+# Claude Code local config (per-machine, not for repo)
+.claude/
+.claude-local*
+
+# Node/package tooling (if ever added)
+node_modules/
+
+# Uploaded data files — contain business-sensitive info, keep local only
+*.xlsx
+*.xls
+*.pdf
+*.csv
+
+# Local environment
+.env
+.env.local
