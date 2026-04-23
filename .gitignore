@@ -35,3 +35,6 @@ node_modules/
 # Local environment
 .env
 .env.local
+
+# Supabase runtime config — contains project URL + anon key, kept per-machine
+config.js

@@ -2,7 +2,7 @@
 
 Internal financial dashboard for Health Reach Diagnostics (健达检测).
 
-Single-file HTML app (`hrd-dashboard.html`) with:
+Single-file HTML app (`index.html`) with:
 
 - Role-based login (Cashier / Receivables / Admin)
 - Revenue analytics (by branch, week, service line)
@@ -15,10 +15,10 @@ Single-file HTML app (`hrd-dashboard.html`) with:
 
 ```bash
 python3 -m http.server 8000
-open http://localhost:8000/hrd-dashboard.html
+open http://localhost:8000/index.html
 ```
 
-Or just double-click `hrd-dashboard.html` to open it directly in Chrome.
+Or just double-click `index.html` to open it directly in Chrome.
 
 ## Security note
 
