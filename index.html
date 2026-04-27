@@ -209,6 +209,18 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .trend-pill.pos{background:#d8f3dc;color:#2d6a4f}
 .trend-pill.neg{background:#fee;color:var(--red)}
 
+/* Period selector */
+.period-bar{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.period-bar .period-label{font-size:.85rem;font-weight:600;color:#274C39;white-space:nowrap}
+.period-group{display:inline-flex;flex-wrap:wrap;gap:6px}
+.period-btn{padding:6px 14px;border:1.5px solid #274C39;background:#fff;color:#274C39;border-radius:6px;font-size:.82rem;font-weight:500;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
+.period-btn:hover:not(.on){background:#f0f6f2}
+.period-btn.on{background:#274C39;color:#fff}
+.period-custom{display:none;align-items:center;gap:6px}
+.period-custom.on{display:inline-flex}
+.period-custom input[type=date]{padding:5px 8px;border:1px solid #e0e0e0;border-radius:4px;font-size:.82rem;font-family:inherit}
+.period-range-note{margin-left:auto;font-size:.75rem;color:#888;font-style:italic;white-space:nowrap}
+
 /* Login overlay */
 .login-overlay{position:fixed;inset:0;background:#274C39;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-card{background:#fff;border-radius:16px;padding:40px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -326,6 +338,26 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 </div></div>
 
 <div class="wrap">
+
+<!-- Period selector (shown on Revenue and Expenses tabs only) -->
+<div class="period-bar" id="periodBar" style="display:none">
+  <span class="period-label">期间 Period:</span>
+  <div class="period-group">
+    <button class="period-btn on" data-period="thisMonth"   onclick="onPeriodChange('thisMonth')">本月 This Month</button>
+    <button class="period-btn"    data-period="lastMonth"   onclick="onPeriodChange('lastMonth')">上月 Last Month</button>
+    <button class="period-btn"    data-period="last3months" onclick="onPeriodChange('last3months')">近3月 Last 3 Months</button>
+    <button class="period-btn"    data-period="last6months" onclick="onPeriodChange('last6months')">近6月 Last 6 Months</button>
+    <button class="period-btn"    data-period="thisYear"    onclick="onPeriodChange('thisYear')">今年 This Year</button>
+    <button class="period-btn"    data-period="custom"      onclick="onPeriodChange('custom')">自定义 Custom</button>
+  </div>
+  <div class="period-custom" id="periodCustom">
+    <input type="date" id="customStart">
+    <span>→</span>
+    <input type="date" id="customEnd">
+    <button class="btn" style="padding:5px 12px;font-size:.78rem" onclick="applyCustomRange()">应用 Apply</button>
+  </div>
+  <span class="period-range-note" id="periodRangeNote"></span>
+</div>
 
 <!-- ============ DASHBOARD TAB ============ -->
 <div class="tab-section active" id="dashboardTab">
@@ -1403,17 +1435,136 @@ function renderRevenueDailyChart(){
   charts.cDaily=new Chart($('cDaily'),{type:'bar',data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{title:{display:false},legend:{position:'bottom',labels:{boxWidth:10,font:{size:9}}}},scales:{x:{stacked:true,ticks:{maxRotation:45,font:{size:9}}},y:{stacked:true,ticks:{callback:v=>fmtShort(v)}}}}});
 }
 
+// ========== PERIOD FILTER (Revenue / Expenses tabs) ==========
+let _selectedPeriod='thisMonth';
+
+function getFilteredData(period){
+  const today=TODAY_STR;
+  let startDate,endDate=today;
+  if(period==='thisMonth'){
+    startDate=today.slice(0,7)+'-01';
+  }else if(period==='lastMonth'){
+    const d=new Date(today);d.setMonth(d.getMonth()-1);
+    startDate=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+    endDate=today.slice(0,7)+'-01';
+  }else if(period==='last3months'){
+    const d=new Date(today);d.setMonth(d.getMonth()-3);
+    startDate=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+  }else if(period==='last6months'){
+    const d=new Date(today);d.setMonth(d.getMonth()-6);
+    startDate=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+  }else if(period==='thisYear'){
+    startDate=today.slice(0,4)+'-01-01';
+  }else if(period==='custom'){
+    startDate=document.getElementById('customStart')?.value||today;
+    endDate=document.getElementById('customEnd')?.value||today;
+  }else{
+    startDate=today.slice(0,7)+'-01';
+  }
+  return{startDate,endDate};
+}
+
+function filterRevenueByRange(revObj,startDate,endDate){
+  const out={};
+  Object.entries(revObj||{}).forEach(([key,entry])=>{
+    const filteredDays={};
+    Object.entries(entry.days||{}).forEach(([dk,svcs])=>{
+      if(dk>=startDate&&dk<=endDate)filteredDays[dk]=svcs;
+    });
+    if(Object.keys(filteredDays).length)out[key]=Object.assign({},entry,{days:filteredDays});
+  });
+  return out;
+}
+
+function filterExpensesByRange(exps,startDate,endDate){
+  return (exps||[]).filter(e=>e.date>=startDate&&e.date<=endDate);
+}
+
+function periodFilterActive(){
+  return (_currentTab==='revenue'||_currentTab==='expenses');
+}
+
+function onPeriodChange(period){
+  _selectedPeriod=period;
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.toggle('on',b.dataset.period===period));
+  const pc=$('periodCustom');if(pc)pc.classList.toggle('on',period==='custom');
+  // Pre-populate custom date pickers with this-month defaults
+  if(period==='custom'){
+    const cs=$('customStart'),ce=$('customEnd');
+    if(cs&&!cs.value)cs.value=TODAY_STR.slice(0,7)+'-01';
+    if(ce&&!ce.value)ce.value=TODAY_STR;
+  }
+  updatePeriodRangeNote();
+  if(appData)renderAll();
+}
+
+function applyCustomRange(){
+  const s=$('customStart')?.value,e=$('customEnd')?.value;
+  if(!s||!e){alert('Please pick both dates 请选择起止日期');return}
+  if(s>e){alert('Start date must be on or before end date 起始日期必须早于结束日期');return}
+  _selectedPeriod='custom';
+  updatePeriodRangeNote();
+  if(appData)renderAll();
+}
+
+function updatePeriodRangeNote(){
+  const n=$('periodRangeNote');if(!n)return;
+  const {startDate,endDate}=getFilteredData(_selectedPeriod);
+  n.textContent=(startDate&&endDate)?(displayDate(startDate)+' → '+displayDate(endDate)):'';
+}
+
 // ========== RENDER ALL ==========
 function renderAll(){
+  // Period filter: swap appData for a filtered copy for the duration of this render
+  // pass, so existing month-scoped renderers consume the period's slice.
+  const shouldFilter=periodFilterActive()&&_selectedPeriod&&_selectedPeriod!=='thisMonth'&&appData;
+  let _savedRev=null,_savedExp=null;
+  if(shouldFilter){
+    const {startDate,endDate}=getFilteredData(_selectedPeriod);
+    _savedRev=appData.revenue;_savedExp=appData.expenses;
+    appData.revenue=filterRevenueByRange(_savedRev,startDate,endDate);
+    appData.expenses=filterExpensesByRange(_savedExp,startDate,endDate);
+  }
+  try{
+    _renderAllCore();
+  }finally{
+    if(shouldFilter){appData.revenue=_savedRev;appData.expenses=_savedExp}
+  }
+}
+
+function getAllDaysForBranch(br){
+  const allKeys=Object.keys(appData.revenue||{});
+  const used=br&&br!=='__all__'?allKeys.filter(k=>k.startsWith(br+'|')):allKeys;
+  const combined={},svcUsed=new Set();
+  used.forEach(key=>{
+    const entry=appData.revenue[key];
+    Object.entries(entry.days||{}).forEach(([dk,svcs])=>{
+      if(!combined[dk])combined[dk]={};
+      Object.entries(svcs).forEach(([s,v])=>{combined[dk][s]=(combined[dk][s]||0)+v;if(v>0)svcUsed.add(s)});
+    });
+  });
+  return{days:combined,svcUsed:Array.from(svcUsed)};
+}
+
+function _renderAllCore(){
   updateBranch();
   const mk=$('mSel').value;
   const br=$('bSel').style.display!=='none'?$('bSel').value:'';
-  const{days,svcUsed}=getDays(mk,br);
+  // When a multi-month period is active, aggregate across ALL filtered revenue/expense rows
+  // (appData was already swapped to a filtered copy at the top of renderAll).
+  const isPeriodFilter=periodFilterActive()&&_selectedPeriod&&_selectedPeriod!=='thisMonth';
+  let days,svcUsed;
+  if(isPeriodFilter){
+    const r=getAllDaysForBranch(br);days=r.days;svcUsed=r.svcUsed;
+  }else{
+    const r=getDays(mk,br);days=r.days;svcUsed=r.svcUsed;
+  }
   dayKeys=Object.keys(days).sort();
   if(dayIdx>=dayKeys.length)dayIdx=dayKeys.length-1;
   if(dayIdx<0)dayIdx=0;
-  const ym=mkToYM(mk);
-  const mExp=appData.expenses.filter(e=>e.date.startsWith(ym));
+  // Under period filter: expenses are already range-filtered; include everything.
+  // Otherwise: scope to the selected month as before.
+  const mExp=isPeriodFilter?(appData.expenses||[]).slice():appData.expenses.filter(e=>e.date.startsWith(mkToYM(mk)));
   _allMonthExp=mExp;
 
   // Executive summary
@@ -1906,6 +2057,10 @@ function showTab(name){
   document.querySelectorAll('.tab-section').forEach(s=>s.classList.toggle('active',s.id===name+'Tab'));
   // Exec bar only on dashboard
   const eb=$('execBar');if(eb)eb.style.display=(name==='dashboard'&&appData)?'':'none';
+  // Period selector: show only on Revenue/Expenses
+  const pb=$('periodBar');if(pb)pb.style.display=(name==='revenue'||name==='expenses')?'':'none';
+  if((name==='revenue'||name==='expenses')&&appData)renderAll();
+  updatePeriodRangeNote();
   // Initialise tab-specific UIs
   if(name==='recon'){
     renderRecon();
