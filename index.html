@@ -291,6 +291,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
   <h1>Financial Dashboard<span>Health Reach Diagnostics 健达检测</span></h1>
   <div class="hdr-act">
     <button class="btn btn-o" style="display:none" onclick="openModal()" id="updBtn">Update Data 更新数据</button>
+    <button class="btn btn-o" onclick="resetCache()" id="resetCacheBtn" title="Clear local cache and force re-upload" style="border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.7)">重置缓存 Reset Cache</button>
     <button class="btn btn-o" onclick="doExport()" id="expBtn" disabled>Export 导出</button>
     <span id="syncBadge" class="sync-badge local" title=""><span class="sync-dot"></span><span id="syncLabel">本地数据 Local data</span></span>
     <span id="roleBadge" class="role-badge" style="display:none"></span>
@@ -731,6 +732,21 @@ function parseExpenseDate(raw){
   }
   return null;
 }
+// Repair YYYY-MM-DD strings that were stored with month/day swapped — only
+// fixable cases are when the "month" field is >12 (impossible), so we know
+// the original write swapped DD/MM during string→date parsing.
+function revalidateDate(dateStr){
+  if(!dateStr)return dateStr;
+  const parts=String(dateStr).split('-');
+  if(parts.length===3){
+    const month=parseInt(parts[1]);
+    const day=parseInt(parts[2]);
+    if(month>12&&day<=12){
+      return parts[0]+'-'+String(day).padStart(2,'0')+'-'+String(month).padStart(2,'0');
+    }
+  }
+  return dateStr;
+}
 function formatDateDisplay(ds){if(!ds)return '';const[y,m,d]=ds.split('-');const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return d+' '+months[parseInt(m)-1]+' '+y}
 function displayDate(dk){
   if(!dk)return 'No data';
@@ -809,7 +825,11 @@ function runParse(){
       // First-time upload: purge old cache so structure is rebuilt cleanly
       if(!appData)localStorage.removeItem('hrd_data');
       appData={lastUpdated:dateStr(new Date()),revenue,expenses};
-      saveData();showDashboard();
+      saveData();
+      // Mirror freshly-parsed expenses to a dedicated key so it's available
+      // immediately on next load without waiting on Supabase fetch.
+      try{localStorage.setItem('expensesData',JSON.stringify(appData.expenses))}catch(e){}
+      showDashboard();
       // Push to Supabase (fire-and-forget — don't block UI)
       syncToSupabase().catch(e=>console.warn('Supabase sync failed:',e));
     }catch(err){showErr('Failed: '+err.message);console.error(err)}
@@ -1048,8 +1068,10 @@ async function loadSharedData(){
       revenue:parseJson(revData?.data_json)||{},
       expenses:parseJson(expData?.data_json)||[]
     };
-    // Rehydrate classification for any expenses missing it
+    // Re-validate dates for any rows that were stored with month/day swapped,
+    // and rehydrate classification for any expenses missing it.
     if(Array.isArray(appData.expenses)){
+      appData.expenses=appData.expenses.map(e=>({...e,date:revalidateDate(e.date)}));
       appData.expenses.forEach(e=>{if(!e.classification)e.classification=classifyExpense(e.description,e.category)});
     }
     window._sharedMeta={
@@ -3050,7 +3072,32 @@ function attemptLogin(){
 function doLogout(){
   sessionStorage.removeItem('hrd_auth');
   sessionStorage.removeItem('hrd_role');
-  location.reload();
+  showLoginScreen();
+}
+
+// Show login overlay without reloading the page (no infinite-reload risk)
+function showLoginScreen(){
+  // Reset any role-tied UI so the next session starts clean
+  if($('roleBadge')){$('roleBadge').textContent='';$('roleBadge').style.display='none'}
+  // Forget shared-data freshness state
+  window._sharedMeta=null;
+  refreshDataFreshnessBadge();
+  // Show the overlay; lock body scroll
+  $('loginOverlay').style.display='flex';
+  document.body.style.overflow='hidden';
+  // Reset login form
+  if($('loginPwd'))$('loginPwd').value='';
+  if($('loginErr'))$('loginErr').style.display='none';
+  setTimeout(()=>$('loginPwd')&&$('loginPwd').focus(),100);
+}
+
+function resetCache(){
+  if(!confirm('This will clear all local data. You will need to re-upload your Excel files. Continue?\n这将清除所有本地数据，您需要重新上传Excel文件。是否继续？'))return;
+  localStorage.clear();
+  sessionStorage.removeItem('hrd_auth');
+  sessionStorage.removeItem('hrd_role');
+  appData=null;
+  showLoginScreen();
 }
 
 function applyRoleAccess(){
