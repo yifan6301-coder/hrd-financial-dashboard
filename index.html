@@ -205,6 +205,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .cls-row-expand td{padding:10px 16px}
 .cls-row-expand .subtbl{width:100%;border-collapse:collapse}
 .cls-row-expand .subtbl td{padding:4px 8px;border-bottom:1px solid #eee}
+.reupload-banner{background:#fff3cd;color:#856404;padding:12px 20px;text-align:center;font-size:.88rem;border:1px solid #ffd966;border-radius:8px;margin-bottom:12px;font-weight:500}
 .trend-pill{display:inline-block;padding:6px 14px;background:#f0f0f0;border-radius:20px;font-size:.82rem;color:#333;font-weight:500}
 .trend-pill.pos{background:#d8f3dc;color:#2d6a4f}
 .trend-pill.neg{background:#fee;color:var(--red)}
@@ -339,6 +340,9 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 </div></div>
 
 <div class="wrap">
+
+<!-- Stale-Supabase-data banner — shown when cached expense rows were parsed by an older version -->
+<div id="reuploadBanner" class="reupload-banner" style="display:none">⚠ 支出数据需要重新上传 Expense data needs re-upload for accuracy</div>
 
 <!-- Period selector (shown on Revenue and Expenses tabs only) -->
 <div class="period-bar" id="periodBar" style="display:none">
@@ -678,21 +682,14 @@ function jsDateToDateStr(d){if(!d||!(d instanceof Date)||isNaN(d))return null;re
 // Used for the CONSOLIDATED EXPENSES sheet where "1/4/2026" means 1 Apr 2026.
 function parseDDMMYYYY(val){
   if(!val)return null;
-  // SheetJS Date object (cellDates:true)
+  // SheetJS Date object (cellDates:true) — use LOCAL methods so SheetJS's
+  // already-localised date isn't shifted again to UTC
   if(val instanceof Date&&!isNaN(val)){
     return val.getFullYear()+'-'+
            String(val.getMonth()+1).padStart(2,'0')+'-'+
            String(val.getDate()).padStart(2,'0');
   }
-  // Excel serial number
-  if(typeof val==='number'&&val>40000){
-    const ms=(val-25569)*86400000;
-    const d=new Date(ms);
-    return d.getUTCFullYear()+'-'+
-           String(d.getUTCMonth()+1).padStart(2,'0')+'-'+
-           String(d.getUTCDate()).padStart(2,'0');
-  }
-  // String — interpret strictly as DD/MM/YYYY (or D/M/YYYY)
+  // String — interpret strictly as DD/MM/YYYY (or D/M/YYYY) — Kenya/EU format
   if(typeof val==='string'){
     const s=val.trim();
     if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
@@ -704,8 +701,25 @@ function parseDDMMYYYY(val){
       return year+'-'+month+'-'+day;
     }
   }
+  // Excel serial number
+  if(typeof val==='number'&&val>40000){
+    const ms=(val-25569)*86400000;
+    const d=new Date(ms);
+    return d.getUTCFullYear()+'-'+
+           String(d.getUTCMonth()+1).padStart(2,'0')+'-'+
+           String(d.getUTCDate()).padStart(2,'0');
+  }
   return null;
 }
+// Alias matching the spec name used elsewhere; same logic.
+const parseExpDate=parseDDMMYYYY;
+
+// Bumped whenever the expense parser logic materially changes. If a browser
+// has cached Supabase-loaded expenses parsed with an older version, those are
+// considered stale and we force a fresh re-upload instead.
+const EXPENSE_PARSER_VERSION='3';
+function showExpenseReuploadBanner(){const el=$('reuploadBanner');if(el)el.style.display=''}
+function hideExpenseReuploadBanner(){const el=$('reuploadBanner');if(el)el.style.display='none'}
 
 function parseExpenseDate(raw){
   if(raw==null)return null;
@@ -829,6 +843,10 @@ function runParse(){
       // Mirror freshly-parsed expenses to a dedicated key so it's available
       // immediately on next load without waiting on Supabase fetch.
       try{localStorage.setItem('expensesData',JSON.stringify(appData.expenses))}catch(e){}
+      // Stamp parser version + clear stale-data banner now that expenses
+      // have been freshly re-parsed by the current code.
+      try{localStorage.setItem('expenseParserVersion',EXPENSE_PARSER_VERSION)}catch(e){}
+      hideExpenseReuploadBanner();
       showDashboard();
       // Push to Supabase (fire-and-forget — don't block UI)
       syncToSupabase().catch(e=>console.warn('Supabase sync failed:',e));
@@ -956,10 +974,11 @@ function parseExpenses(){
   const sheetName=newSheet||oldSheet;
   if(!sheetName){console.warn('[parseExpenses] No CONSOLIDATED EXPENSES or SUMMARY sheet found. Available sheets:',expWB.SheetNames);return out}
   const isNew=!!newSheet;
-  // Column indices differ between the two layouts
+  // Column indices differ between the two layouts. Both formats include a
+  // TRANSACTION_COST column directly after CASH_OUT.
   const COL=isNew
-    ?{date:0,desc:1,branch:2,category:3,txn:4,cashIn:5,cashOut:6}
-    :{date:0,desc:1,branch:null,category:2,txn:3,cashIn:4,cashOut:5};
+    ?{date:0,desc:1,branch:2,category:3,txn:4,cashIn:5,cashOut:6,txCost:7}
+    :{date:0,desc:1,branch:null,category:2,txn:3,cashIn:4,cashOut:5,txCost:6};
   const ws=expWB.Sheets[sheetName];
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
   console.group('[parseExpenses] '+sheetName+' ('+(isNew?'new':'old')+' format)');
@@ -975,18 +994,23 @@ function parseExpenses(){
     const category=row[COL.category];
     const transaction_no=row[COL.txn];
     const cashOutRaw=row[COL.cashOut];
+    const txCostRaw=COL.txCost!=null?row[COL.txCost]:null;
     // Diagnostic: log first 3 raw date values so we know whether SheetJS
     // delivered a Date object, a number (serial), or a string.
     if(r<=3)console.log('[parseExpenses] date sample row',r,'typeof=',typeof rawDate,'value=',rawDate,(rawDate instanceof Date)?'(Date)':'');
     // Skip internal transfers
     if(typeof description==='string'&&/PETTY\s*CASH\s*FLOAT\s*RECEIVED/i.test(description)){skipped.pettyCash++;continue}
-    // Skip if CASH OUT null/undefined/NaN/0
+    // Skip if CASH OUT null/undefined
     if(cashOutRaw==null){skipped.noCashOut++;continue}
-    const amount=cellV(cashOutRaw);
+    // amount = CASH OUT + TRANSACTION COST (transaction cost defaults to 0)
+    const cashOut=cellV(cashOutRaw);
+    const txCost=txCostRaw==null?0:cellV(txCostRaw);
+    const amount=(cashOut||0)+(txCost||0);
     if(!amount||isNaN(amount)||amount===0){skipped.noCashOut++;continue}
-    // Parse date as DD/MM/YYYY (Kenya / EU format)
+    // Parse date as DD/MM/YYYY (Kenya / EU format) — handles JS Date,
+    // string DD/MM/YYYY, and Excel serial via parseExpDate.
     if(rawDate==null){skipped.noDate++;continue}
-    const dk=parseDDMMYYYY(rawDate);
+    const dk=parseExpDate(rawDate);
     if(!dk){skipped.badDate++;continue}
     if(dk>TODAY_STR){skipped.future++;continue}
     const categoryStr=String(category||'').trim().toUpperCase();
@@ -1056,13 +1080,23 @@ async function loadSharedData(){
       supabaseClient.from('revenue_uploads').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle(),
       supabaseClient.from('expense_uploads').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle()
     ]);
-    const revData=revRes?.data,expData=expRes?.data;
+    const revData=revRes?.data;
+    let expData=expRes?.data;
     if(!revData&&!expData)return false;
     const parseJson=(v)=>{
       if(v==null)return null;
       if(typeof v==='string'){try{return JSON.parse(v)}catch(e){return null}}
       return v;
     };
+    // Version-gate: if the cached parser version doesn't match, ignore the
+    // Supabase expense payload and force a fresh re-upload.
+    const cachedVer=localStorage.getItem('expenseParserVersion');
+    let staleExpenses=false;
+    if(expData&&cachedVer!==EXPENSE_PARSER_VERSION){
+      console.warn('[supabase] expense parser version mismatch (cached='+cachedVer+', expected='+EXPENSE_PARSER_VERSION+') — discarding stale data');
+      expData=null;
+      staleExpenses=true;
+    }
     appData={
       lastUpdated:((revData?.created_at||expData?.created_at||new Date().toISOString())+'').slice(0,10),
       revenue:parseJson(revData?.data_json)||{},
@@ -1074,6 +1108,7 @@ async function loadSharedData(){
       appData.expenses=appData.expenses.map(e=>({...e,date:revalidateDate(e.date)}));
       appData.expenses.forEach(e=>{if(!e.classification)e.classification=classifyExpense(e.description,e.category)});
     }
+    if(staleExpenses)showExpenseReuploadBanner();
     window._sharedMeta={
       revUploader:revData?.uploaded_by||null,revTime:revData?.created_at||null,
       expUploader:expData?.uploaded_by||null,expTime:expData?.created_at||null
